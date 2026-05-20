@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GLB ビューアー</title>
+<style>
+  :root {
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #1a1a1a;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans",
+      "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+    color: #eee;
+  }
+  #canvas-container {
+    position: fixed;
+    inset: 0;
+  }
+  #ui {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: rgba(0, 0, 0, 0.55);
+    padding: 12px 14px;
+    border-radius: 8px;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    max-width: calc(100% - 32px);
+  }
+  #ui h1 {
+    margin: 0 0 4px 0;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  #file-label {
+    display: inline-block;
+    padding: 6px 12px;
+    background: #3a7afe;
+    color: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    user-select: none;
+    transition: background 0.15s;
+  }
+  #file-label:hover { background: #4a8aff; }
+  #file-input { display: none; }
+  #status {
+    font-size: 12px;
+    color: #bbb;
+    min-height: 1em;
+  }
+  #help {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.55);
+    padding: 10px 14px;
+    border-radius: 8px;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    font-size: 12px;
+    color: #ccc;
+    line-height: 1.6;
+  }
+  #loading {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 20;
+    padding: 16px 24px;
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 8px;
+    font-size: 14px;
+    display: none;
+  }
+  #loading.active { display: block; }
+</style>
+</head>
+<body>
+<div id="canvas-container"></div>
+
+<div id="ui">
+  <h1>GLB ビューアー</h1>
+  <label id="file-label" for="file-input">別のGLBファイルを選択</label>
+  <input id="file-input" type="file" accept=".glb,.gltf,model/gltf-binary" />
+  <div id="status">読み込み中...</div>
+</div>
+
+<div id="help">
+  左ドラッグ: 回転 / 右ドラッグ: 移動 / ホイール: ズーム
+</div>
+
+<div id="loading">読み込み中...</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const container = document.getElementById('canvas-container');
+const statusEl = document.getElementById('status');
+const loadingEl = document.getElementById('loading');
+const fileInput = document.getElementById('file-input');
+
+// --- レンダラー ---
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+container.appendChild(renderer.domElement);
+
+// --- シーン ---
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a1a);
+
+// 環境マップ (PBR マテリアル用)
+const pmremGenerator = new THREE.PMREMGenerator(renderer);
+scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+
+// --- カメラ ---
+const camera = new THREE.PerspectiveCamera(
+  45,
+  window.innerWidth / window.innerHeight,
+  0.01,
+  1000
+);
+camera.position.set(2, 2, 3);
+
+// --- ライト ---
+const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+scene.add(ambient);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+dirLight.position.set(5, 10, 7);
+scene.add(dirLight);
+
+// --- コントロール ---
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+
+// --- ローダー ---
+const loader = new GLTFLoader();
+let currentModel = null;
+
+function clearModel() {
+  if (!currentModel) return;
+  scene.remove(currentModel);
+  currentModel.traverse((obj) => {
+    if (obj.isMesh) {
+      obj.geometry?.dispose();
+      const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
+      materials.forEach((m) => {
+        if (!m) return;
+        for (const key of Object.keys(m)) {
+          const value = m[key];
+          if (value && typeof value === 'object' && 'isTexture' in value) {
+            value.dispose();
+          }
+        }
+        m.dispose();
+      });
+    }
+  });
+  currentModel = null;
+}
+
+function frameModel(model) {
+  const box = new THREE.Box3().setFromObject(model);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+
+  // モデルを原点中心に移動
+  model.position.x -= center.x;
+  model.position.y -= center.y;
+  model.position.z -= center.z;
+
+  // カメラをモデル全体が収まる位置に
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const fov = camera.fov * (Math.PI / 180);
+  const distance = (maxDim / 2) / Math.tan(fov / 2) * 1.6;
+
+  camera.position.set(distance, distance * 0.7, distance);
+  camera.near = maxDim / 100;
+  camera.far = maxDim * 100;
+  camera.updateProjectionMatrix();
+
+  controls.target.set(0, 0, 0);
+  controls.update();
+}
+
+function showLoading(show, message = '読み込み中...') {
+  loadingEl.textContent = message;
+  loadingEl.classList.toggle('active', show);
+}
+
+function loadFromUrl(url, displayName) {
+  showLoading(true);
+  statusEl.textContent = `${displayName} を読み込み中...`;
+
+  loader.load(
+    url,
+    (gltf) => {
+      clearModel();
+      currentModel = gltf.scene;
+      scene.add(currentModel);
+      frameModel(currentModel);
+      showLoading(false);
+      statusEl.textContent = `表示中: ${displayName}`;
+    },
+    (xhr) => {
+      if (xhr.lengthComputable) {
+        const pct = (xhr.loaded / xhr.total) * 100;
+        showLoading(true, `読み込み中... ${pct.toFixed(0)}%`);
+      }
+    },
+    (err) => {
+      console.error(err);
+      showLoading(false);
+      statusEl.textContent = `エラー: ${displayName} を読み込めませんでした`;
+    }
+  );
+}
+
+function loadFromFile(file) {
+  const url = URL.createObjectURL(file);
+  showLoading(true);
+  statusEl.textContent = `${file.name} を読み込み中...`;
+
+  loader.load(
+    url,
+    (gltf) => {
+      URL.revokeObjectURL(url);
+      clearModel();
+      currentModel = gltf.scene;
+      scene.add(currentModel);
+      frameModel(currentModel);
+      showLoading(false);
+      statusEl.textContent = `表示中: ${file.name}`;
+    },
+    undefined,
+    (err) => {
+      URL.revokeObjectURL(url);
+      console.error(err);
+      showLoading(false);
+      statusEl.textContent = `エラー: ${file.name} を読み込めませんでした`;
+    }
+  );
+}
+
+// --- ファイル選択 ---
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files?.[0];
+  if (file) loadFromFile(file);
+});
+
+// --- ドラッグ&ドロップ ---
+window.addEventListener('dragover', (e) => {
+  e.preventDefault();
+});
+window.addEventListener('drop', (e) => {
+  e.preventDefault();
+  const file = e.dataTransfer?.files?.[0];
+  if (file && /\.(glb|gltf)$/i.test(file.name)) {
+    loadFromFile(file);
+  }
+});
+
+// --- リサイズ ---
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// --- アニメーションループ ---
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+// --- 初期モデルの読み込み ---
+loadFromUrl('./ball_bearing_arnold.glb', 'ball_bearing_arnold.glb');
