@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Three.js 読み込みテスト</title>
+<style>
+  body {
+    margin: 0;
+    padding: 40px 20px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+    background: #1a1a1a;
+    color: #eee;
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 22px;
+    margin-bottom: 24px;
+  }
+  .item {
+    padding: 14px 18px;
+    margin-bottom: 10px;
+    border-radius: 6px;
+    background: #2a2a2a;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  .ok { background: #1b5e20; }
+  .ng { background: #b71c1c; }
+  .pending { background: #555; }
+  .label { font-weight: bold; margin-right: 8px; }
+  pre {
+    background: #111;
+    padding: 12px;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-size: 12px;
+    color: #ccc;
+    margin-top: 8px;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+</style>
+</head>
+<body>
+<h1>Three.js 読み込みテスト</h1>
+
+<div id="test1" class="item pending"><span class="label">テスト1:</span>JavaScript の実行 — 確認中...</div>
+<div id="test2" class="item pending"><span class="label">テスト2:</span>three.module.js の読み込み — 確認中...</div>
+<div id="test3" class="item pending"><span class="label">テスト3:</span>GLTFLoader.js の読み込み — 確認中...</div>
+<div id="test4" class="item pending"><span class="label">テスト4:</span>GLBファイルへのアクセス — 確認中...</div>
+<div id="errors" class="item" style="display:none; background:#3a1010;">
+  <span class="label">捕捉したエラー:</span>
+  <pre id="error-log"></pre>
+</div>
+
+<script>
+  // テスト1: JavaScriptが動くか
+  document.getElementById('test1').textContent = 'テスト1: JavaScript の実行 — 成功';
+  document.getElementById('test1').className = 'item ok';
+
+  // エラー捕捉
+  const errorLog = [];
+  function logError(msg) {
+    errorLog.push(msg);
+    const el = document.getElementById('errors');
+    el.style.display = 'block';
+    document.getElementById('error-log').textContent = errorLog.join('\n\n');
+  }
+  window.addEventListener('error', (e) => {
+    logError('error: ' + (e.message || e.error) + ' @ ' + (e.filename || '?'));
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    logError('unhandled rejection: ' + (e.reason?.message || e.reason));
+  });
+
+  // テスト4: GLBファイルにfetchでアクセス
+  fetch('./ball_bearing_arnold.glb', { method: 'HEAD' })
+    .then((res) => {
+      const el = document.getElementById('test4');
+      if (res.ok) {
+        el.textContent = 'テスト4: GLBファイルへのアクセス — 成功 (status ' + res.status + ')';
+        el.className = 'item ok';
+      } else {
+        el.textContent = 'テスト4: GLBファイルへのアクセス — 失敗 (status ' + res.status + ')';
+        el.className = 'item ng';
+      }
+    })
+    .catch((err) => {
+      const el = document.getElementById('test4');
+      el.textContent = 'テスト4: GLBファイルへのアクセス — エラー: ' + err.message;
+      el.className = 'item ng';
+    });
+</script>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+  // テスト2: three.module.jsの読み込み
+  try {
+    const THREE = await import('three');
+    const el = document.getElementById('test2');
+    el.textContent = 'テスト2: three.module.js の読み込み — 成功 (version ' + THREE.REVISION + ')';
+    el.className = 'item ok';
+  } catch (err) {
+    const el = document.getElementById('test2');
+    el.textContent = 'テスト2: three.module.js の読み込み — 失敗: ' + err.message;
+    el.className = 'item ng';
+    console.error(err);
+  }
+
+  // テスト3: GLTFLoaderの読み込み
+  try {
+    await import('three/addons/loaders/GLTFLoader.js');
+    const el = document.getElementById('test3');
+    el.textContent = 'テスト3: GLTFLoader.js の読み込み — 成功';
+    el.className = 'item ok';
+  } catch (err) {
+    const el = document.getElementById('test3');
+    el.textContent = 'テスト3: GLTFLoader.js の読み込み — 失敗: ' + err.message;
+    el.className = 'item ng';
+    console.error(err);
+  }
+</script>
+</body>
+</html>
