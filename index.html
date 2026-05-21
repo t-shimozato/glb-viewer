@@ -189,17 +189,17 @@ function clearModel() {
   currentModel = null;
 }
 
-// 金属マテリアルの反射を強化する関数
+// 金属マテリアルの反射を強化する関数 (ほぼ鏡面まで強化)
 function enhanceMaterials(model) {
   let enhancedCount = 0;
   model.traverse((obj) => {
     if (obj.isMesh && obj.material) {
       const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
       mats.forEach((m) => {
-        // PBR マテリアル(MeshStandardMaterial 系)で金属らしいものだけ強化
-        if (m && 'metalness' in m && m.metalness >= 0.5) {
+        // PBR マテリアル(MeshStandardMaterial 系)で少しでも金属っぽければ強化
+        if (m && 'metalness' in m && m.metalness >= 0.1) {
           m.metalness = 1.0;
-          m.roughness = Math.max(0, (m.roughness ?? 0.5) * 0.7);
+          m.roughness = 0.05; // ほぼ完全な鏡面
           m.needsUpdate = true;
           enhancedCount++;
         }
