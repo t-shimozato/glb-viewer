@@ -335,13 +335,17 @@ function frameModel(model) {
 
   const maxDim = Math.max(size.x, size.y, size.z) || 1;
   const fov = camera.fov * (Math.PI / 180);
-  const distance = (maxDim / 2) / Math.tan(fov / 2) * 1.5;
+  const distance = (maxDim / 2) / Math.tan(fov / 2) * 1.6;
 
-  // 画面のアスペクト比に応じて、ターゲットを左にオフセットしモデルを右寄りに見せる
+  // モデルを画面の右側に見せるオフセット
+  // カメラとターゲットを同じ量だけ X 方向に動かすことで、視線の向きを保ったまま
+  // 画面上のモデルの位置を横にずらせる
   const aspect = camera.aspect;
-  const offsetX = -maxDim * 0.4 * Math.max(1, aspect / 1.5);
+  // 画面が横長(広い)ほどオフセットを大きく
+  const screenOffsetRatio = aspect > 1.5 ? 0.35 : 0.2;
+  const offsetX = -maxDim * screenOffsetRatio;
 
-  camera.position.set(distance + offsetX, distance * 0.5, distance);
+  camera.position.set(distance + offsetX, distance * 0.7, distance);
   camera.near = maxDim / 100;
   camera.far = maxDim * 100;
   camera.updateProjectionMatrix();
