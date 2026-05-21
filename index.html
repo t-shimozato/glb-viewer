@@ -202,7 +202,7 @@ function enhanceMaterials(model) {
           if (m.metalnessMap) m.metalnessMap = null;
           if (m.roughnessMap) m.roughnessMap = null;
           m.metalness = 1.0;
-          m.roughness = 0.4; // サテン仕上げ風
+          m.roughness = 0.25; // 磨かれた金属(光沢あり)
           m.needsUpdate = true;
           enhancedCount++;
           console.log('[GLB Viewer]   - ' + (m.name || '(無名)') + ' / type=' + m.type);
