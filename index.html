@@ -71,11 +71,12 @@ function setStatus(msg) {
 
 setStatus('Three.js を読み込み中...');
 
-let THREE, OrbitControls, GLTFLoader;
+let THREE, OrbitControls, GLTFLoader, RGBELoader;
 try {
   THREE = await import('three');
   ({ OrbitControls } = await import('three/addons/controls/OrbitControls.js'));
   ({ GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js'));
+  ({ RGBELoader } = await import('three/addons/loaders/RGBELoader.js'));
 } catch (err) {
   setStatus('ライブラリの読み込みに失敗: ' + err.message);
   throw err;
@@ -96,74 +97,77 @@ container.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1a1a1a);
 
-// --- 環境マップ (PMREMGenerator + 簡易グラデーションシーン) ---
-function createSimpleEnvironment(THREE) {
-  const envScene = new THREE.Scene();
-
-  // 大きな球の内側にグラデーションを描いて、環境光として使う
-  const geometry = new THREE.SphereGeometry(50, 32, 32);
-
-  // 頂点カラーで上下のグラデーションを作る
-  const colors = [];
-  const positionAttr = geometry.attributes.position;
-  const topColor = new THREE.Color(0xffffff);     // 上: 明るい白
-  const midColor = new THREE.Color(0xb8c8d8);     // 中央: 明るいグレー
-  const bottomColor = new THREE.Color(0x404858);  // 下: 暗めのグレー
-
-  for (let i = 0; i < positionAttr.count; i++) {
-    const y = positionAttr.getY(i) / 50; // -1 ~ 1
-    let color;
-    if (y > 0) {
-      color = midColor.clone().lerp(topColor, y);
-    } else {
-      color = midColor.clone().lerp(bottomColor, -y);
-    }
-    colors.push(color.r, color.g, color.b);
-  }
-  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-
-  const material = new THREE.MeshBasicMaterial({
-    vertexColors: true,
-    side: THREE.BackSide,
-  });
-
-  const sphere = new THREE.Mesh(geometry, material);
-  envScene.add(sphere);
-
-  // 強めの光源を環境に置いてハイライトを作る
-  const light1 = new THREE.Mesh(
-    new THREE.SphereGeometry(2, 8, 8),
-    new THREE.MeshBasicMaterial({ color: 0xffffff })
-  );
-  light1.position.set(10, 15, 5);
-  envScene.add(light1);
-
-  const light2 = new THREE.Mesh(
-    new THREE.SphereGeometry(1.5, 8, 8),
-    new THREE.MeshBasicMaterial({ color: 0xffeecc })
-  );
-  light2.position.set(-8, 10, -3);
-  envScene.add(light2);
-
-  return envScene;
-}
-
-const pmremGenerator = new THREE.PMREMGenerator(renderer);
-const envScene = createSimpleEnvironment(THREE);
-const envMap = pmremGenerator.fromScene(envScene, 0.04).texture;
-scene.environment = envMap;
-pmremGenerator.dispose();
-
 // --- カメラ ---
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 1000);
 camera.position.set(2, 2, 3);
 
-// --- ライト (環境マップに加えて補助光も配置) ---
+// --- ライト (環境マップに加えて補助光) ---
 scene.add(new THREE.AmbientLight(0xffffff, 0.2));
-
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
 dirLight.position.set(5, 10, 7);
 scene.add(dirLight);
+
+// --- 簡易環境マップを作る関数 (HDR読み込み失敗時のフォールバック用) ---
+function createSimpleEnvironment() {
+  const envScene = new THREE.Scene();
+  const geometry = new THREE.SphereGeometry(50, 32, 32);
+  const colors = [];
+  const positionAttr = geometry.attributes.position;
+  const topColor = new THREE.Color(0xffffff);
+  const midColor = new THREE.Color(0xb8c8d8);
+  const bottomColor = new THREE.Color(0x404858);
+
+  for (let i = 0; i < positionAttr.count; i++) {
+    const y = positionAttr.getY(i) / 50;
+    let color;
+    if (y > 0) color = midColor.clone().lerp(topColor, y);
+    else color = midColor.clone().lerp(bottomColor, -y);
+    colors.push(color.r, color.g, color.b);
+  }
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  const material = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide });
+  envScene.add(new THREE.Mesh(geometry, material));
+
+  const light1 = new THREE.Mesh(new THREE.SphereGeometry(2, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  light1.position.set(10, 15, 5);
+  envScene.add(light1);
+
+  return envScene;
+}
+
+// --- 環境マップの読み込み (HDR優先、失敗時はフォールバック) ---
+const pmremGenerator = new THREE.PMREMGenerator(renderer);
+
+setStatus('HDR 環境マップを読み込み中...');
+new RGBELoader().load(
+  './environment.hdr',
+  (texture) => {
+    texture.mapping = THREE.EquirectangularReflectionMapping;
+    const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+    scene.environment = envMap;
+    texture.dispose();
+    pmremGenerator.dispose();
+    setStatus('HDR 環境マップ 読み込み完了');
+    // モデルの読み込みを開始
+    loadFromUrl('./ball_bearing_arnold.glb', 'ball_bearing_arnold.glb');
+  },
+  (xhr) => {
+    if (xhr.lengthComputable) {
+      const pct = (xhr.loaded / xhr.total) * 100;
+      setStatus('HDR 環境マップを読み込み中... ' + pct.toFixed(0) + '%');
+    }
+  },
+  (err) => {
+    console.warn('HDR の読み込みに失敗、簡易環境マップにフォールバックします', err);
+    setStatus('HDR 読み込み失敗、簡易環境マップを使用します');
+    const envScene = createSimpleEnvironment();
+    const envMap = pmremGenerator.fromScene(envScene, 0.04).texture;
+    scene.environment = envMap;
+    pmremGenerator.dispose();
+    // フォールバック後もモデルは読み込む
+    loadFromUrl('./ball_bearing_arnold.glb', 'ball_bearing_arnold.glb');
+  }
+);
 
 // --- コントロール ---
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -283,9 +287,6 @@ function animate() {
   renderer.render(scene, camera);
 }
 animate();
-
-// --- 初期モデル ---
-loadFromUrl('./ball_bearing_arnold.glb', 'ball_bearing_arnold.glb');
 </script>
 </body>
 </html>
