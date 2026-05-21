@@ -16,10 +16,13 @@
     color: #333;
   }
 
-  /* モデル表示エリア (画面全体、背景透過) */
+  /* モデル表示エリア (画面の右半分に配置) */
   #viewer-area {
     position: fixed;
-    inset: 0;
+    top: 0;
+    right: 0;
+    width: 55%;
+    height: 100%;
     z-index: 1;
   }
   #canvas-container {
@@ -27,7 +30,7 @@
     inset: 0;
   }
 
-  /* テキストエリア (画面の中央左) */
+  /* テキストエリア (画面の左中央) */
   #text-area {
     position: fixed;
     top: 50%;
@@ -120,6 +123,11 @@
 
   /* レスポンシブ */
   @media (max-width: 768px) {
+    #viewer-area {
+      width: 100%;
+      height: 60%;
+      top: 40%;
+    }
     #text-area {
       top: 24px;
       left: 24px;
@@ -133,7 +141,7 @@
 </head>
 <body>
 
-<!-- モデル表示エリア (画面全体・背景透過、背景画像が透けて見える) -->
+<!-- モデル表示エリア (画面の右半分) -->
 <div id="viewer-area">
   <div id="canvas-container"></div>
 </div>
@@ -196,7 +204,7 @@ try {
 
 setStatus('シーンを初期化中...');
 
-// --- レンダラー (背景透過、背景画像を透かす) ---
+// --- レンダラー (背景透過) ---
 const { width: vw, height: vh } = getViewerSize();
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -323,7 +331,7 @@ function enhanceMaterials(model) {
   console.log('[GLB Viewer] 金属マテリアルを強化: ' + enhancedCount + ' 件');
 }
 
-// モデルを画面の右側真ん中に表示
+// シンプルなフレーム計算: モデルを原点中心に、カメラは斜め前方からモデル全体が収まる位置に
 function frameModel(model) {
   const box = new THREE.Box3().setFromObject(model);
   const size = box.getSize(new THREE.Vector3());
@@ -337,20 +345,12 @@ function frameModel(model) {
   const fov = camera.fov * (Math.PI / 180);
   const distance = (maxDim / 2) / Math.tan(fov / 2) * 1.6;
 
-  // モデルを画面の右側に見せるオフセット
-  // カメラとターゲットを同じ量だけ X 方向に動かすことで、視線の向きを保ったまま
-  // 画面上のモデルの位置を横にずらせる
-  const aspect = camera.aspect;
-  // 画面が横長(広い)ほどオフセットを大きく
-  const screenOffsetRatio = aspect > 1.5 ? 0.35 : 0.2;
-  const offsetX = -maxDim * screenOffsetRatio;
-
-  camera.position.set(distance + offsetX, distance * 0.7, distance);
+  camera.position.set(distance, distance * 0.7, distance);
   camera.near = maxDim / 100;
   camera.far = maxDim * 100;
   camera.updateProjectionMatrix();
 
-  controls.target.set(offsetX, 0, 0);
+  controls.target.set(0, 0, 0);
   controls.update();
 }
 
