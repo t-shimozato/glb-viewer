@@ -199,7 +199,7 @@ function enhanceMaterials(model) {
         // PBR マテリアル(MeshStandardMaterial 系)で少しでも金属っぽければ強化
         if (m && 'metalness' in m && m.metalness >= 0.1) {
           m.metalness = 1.0;
-          m.roughness = 0.28; // マット寄りの金属感
+          m.roughness = 0.4; // サテン仕上げ風
           m.needsUpdate = true;
           enhancedCount++;
         }
