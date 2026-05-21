@@ -134,14 +134,16 @@
     #text-area p { font-size: 13px; line-height: 1.7; }
 
     /* モデルエリア: テキストの下から UI の上まで */
-    /* 上 = テキスト分(約260px)、下 = UI分(約130px) */
     #viewer-area {
       width: 100%;
       top: 260px;
-      bottom: 130px;
+      bottom: 110px;
       height: auto;
       right: 0;
     }
+
+    /* 操作ヘルプはスマホでは非表示 */
+    #help { display: none; }
   }
 
   /* さらに小さい画面(縦長スマホ等) */
@@ -149,7 +151,7 @@
     #text-area h2 { font-size: 28px; margin-bottom: 12px; }
     #viewer-area {
       top: 220px;
-      bottom: 130px;
+      bottom: 110px;
     }
   }
 </style>
@@ -358,7 +360,11 @@ function frameModel(model) {
 
   const maxDim = Math.max(size.x, size.y, size.z) || 1;
   const fov = camera.fov * (Math.PI / 180);
-  const distance = (maxDim / 2) / Math.tan(fov / 2) * 1.6;
+
+  // 画面幅が小さい(スマホ)場合はカメラを近づけてモデルを大きく表示
+  const isMobile = window.innerWidth <= 768;
+  const fitRatio = isMobile ? 1.6 / 1.5 : 1.6; // スマホでは1.5倍に
+  const distance = (maxDim / 2) / Math.tan(fov / 2) * fitRatio;
 
   camera.position.set(distance, distance * 0.7, distance);
   camera.near = maxDim / 100;
