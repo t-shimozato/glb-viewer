@@ -90,7 +90,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
+renderer.toneMappingExposure = 1.5; // 露出を上げて全体を明るく
 container.appendChild(renderer.domElement);
 
 // --- シーン ---
@@ -148,7 +148,6 @@ new RGBELoader().load(
     texture.dispose();
     pmremGenerator.dispose();
     setStatus('HDR 環境マップ 読み込み完了');
-    // モデルの読み込みを開始
     loadFromUrl('./ball_bearing_arnold.glb', 'ball_bearing_arnold.glb');
   },
   (xhr) => {
@@ -164,7 +163,6 @@ new RGBELoader().load(
     const envMap = pmremGenerator.fromScene(envScene, 0.04).texture;
     scene.environment = envMap;
     pmremGenerator.dispose();
-    // フォールバック後もモデルは読み込む
     loadFromUrl('./ball_bearing_arnold.glb', 'ball_bearing_arnold.glb');
   }
 );
@@ -189,6 +187,26 @@ function clearModel() {
     }
   });
   currentModel = null;
+}
+
+// 金属マテリアルの反射を強化する関数
+function enhanceMaterials(model) {
+  let enhancedCount = 0;
+  model.traverse((obj) => {
+    if (obj.isMesh && obj.material) {
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      mats.forEach((m) => {
+        // PBR マテリアル(MeshStandardMaterial 系)で金属らしいものだけ強化
+        if (m && 'metalness' in m && m.metalness >= 0.5) {
+          m.metalness = 1.0;
+          m.roughness = Math.max(0, (m.roughness ?? 0.5) * 0.7);
+          m.needsUpdate = true;
+          enhancedCount++;
+        }
+      });
+    }
+  });
+  console.log('[GLB Viewer] 金属マテリアルを強化: ' + enhancedCount + ' 件');
 }
 
 function frameModel(model) {
@@ -220,6 +238,7 @@ function loadFromUrl(url, displayName) {
     (gltf) => {
       clearModel();
       currentModel = gltf.scene;
+      enhanceMaterials(currentModel); // 金属の反射を強化
       scene.add(currentModel);
       frameModel(currentModel);
       setStatus('表示中: ' + displayName);
@@ -246,6 +265,7 @@ function loadFromFile(file) {
       URL.revokeObjectURL(url);
       clearModel();
       currentModel = gltf.scene;
+      enhanceMaterials(currentModel); // 金属の反射を強化
       scene.add(currentModel);
       frameModel(currentModel);
       setStatus('表示中: ' + file.name);
