@@ -3,51 +3,166 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>GLB ビューアー</title>
+<title>AKベアリング</title>
 <style>
-  :root { color-scheme: dark; }
+  :root { color-scheme: light; }
   * { box-sizing: border-box; }
   html, body {
     margin: 0; padding: 0; width: 100%; height: 100%;
-    overflow: hidden; background: #1a1a1a;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
-    color: #eee;
+    overflow: hidden; background: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+    color: #333;
   }
-  #canvas-container { position: fixed; inset: 0; }
+
+  /* 全体レイアウト: 左右 2カラム */
+  #layout {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: row;
+  }
+
+  /* 左カラム: 説明テキスト */
+  #info-panel {
+    width: 40%;
+    min-width: 280px;
+    padding: 60px 50px;
+    overflow-y: auto;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  #info-panel h2 {
+    margin: 0 0 24px 0;
+    color: #d32f2f;
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+  #info-panel p {
+    margin: 0;
+    color: #555555;
+    font-size: 15px;
+    line-height: 1.9;
+  }
+
+  /* 右カラム: モデル表示 */
+  #viewer-area {
+    flex: 1;
+    position: relative;
+    background: #ffffff;
+  }
+  #canvas-container {
+    position: absolute;
+    inset: 0;
+  }
+
+  /* UIパネル(モデルエリア右上) */
   #ui {
-    position: fixed; top: 16px; left: 16px; z-index: 10;
-    display: flex; flex-direction: column; gap: 8px;
-    background: rgba(0, 0, 0, 0.55); padding: 12px 14px;
-    border-radius: 8px; max-width: calc(100% - 32px);
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.85);
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    max-width: calc(100% - 32px);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
   }
-  #ui h1 { margin: 0 0 4px 0; font-size: 14px; font-weight: 600; }
+  #ui h1 {
+    margin: 0 0 4px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+  }
   #file-label {
-    display: inline-block; padding: 6px 12px;
-    background: #3a7afe; color: #fff; border-radius: 4px;
-    cursor: pointer; font-size: 13px; user-select: none;
+    display: inline-block;
+    padding: 6px 12px;
+    background: #3a7afe;
+    color: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    user-select: none;
+    transition: background 0.15s;
   }
   #file-label:hover { background: #4a8aff; }
   #file-input { display: none; }
-  #status { font-size: 12px; color: #bbb; min-height: 1em; word-break: break-all; }
+  #status {
+    font-size: 12px;
+    color: #666;
+    min-height: 1em;
+    word-break: break-all;
+  }
+
+  /* 操作ヘルプ(モデルエリア右下) */
   #help {
-    position: fixed; bottom: 16px; right: 16px; z-index: 10;
-    background: rgba(0, 0, 0, 0.55); padding: 10px 14px;
-    border-radius: 8px; font-size: 12px; color: #ccc; line-height: 1.6;
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    z-index: 10;
+    background: rgba(255, 255, 255, 0.85);
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    font-size: 12px;
+    color: #555;
+    line-height: 1.6;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+
+  /* レスポンシブ: 画面幅が狭い場合は上下分割 */
+  @media (max-width: 768px) {
+    #layout {
+      flex-direction: column;
+    }
+    #info-panel {
+      width: 100%;
+      min-width: 0;
+      padding: 24px 24px 16px 24px;
+      height: 40%;
+      justify-content: flex-start;
+    }
+    #info-panel h2 { font-size: 22px; margin-bottom: 12px; }
+    #info-panel p { font-size: 13px; line-height: 1.7; }
+    #viewer-area {
+      height: 60%;
+    }
   }
 </style>
 </head>
 <body>
-<div id="canvas-container"></div>
+<div id="layout">
 
-<div id="ui">
-  <h1>GLB ビューアー</h1>
-  <label id="file-label" for="file-input">別のGLBファイルを選択</label>
-  <input id="file-input" type="file" accept=".glb,.gltf" />
-  <div id="status">起動中...</div>
-</div>
+  <!-- 左: 説明テキスト -->
+  <aside id="info-panel">
+    <h2>AKベアリング</h2>
+    <p>広い寸法範囲をもつ深溝玉軸受は、転がり軸受の中でも最も多く使用されている形式で、ラジアル荷重と両方向のある程度のアキシアル荷重を同時に受けることができます。高速回転・低騒音・低振動の用途に適しています。</p>
+  </aside>
 
-<div id="help">
-  左ドラッグ: 回転 / 右ドラッグ: 移動 / ホイール: ズーム
+  <!-- 右: モデル -->
+  <main id="viewer-area">
+    <div id="canvas-container"></div>
+
+    <div id="ui">
+      <h1>GLB ビューアー</h1>
+      <label id="file-label" for="file-input">別のGLBファイルを選択</label>
+      <input id="file-input" type="file" accept=".glb,.gltf" />
+      <div id="status">起動中...</div>
+    </div>
+
+    <div id="help">
+      左ドラッグ: 回転 / 右ドラッグ: 移動 / ホイール: ズーム
+    </div>
+  </main>
+
 </div>
 
 <script type="importmap">
@@ -69,6 +184,11 @@ function setStatus(msg) {
   console.log('[GLB Viewer]', msg);
 }
 
+function getViewerSize() {
+  const rect = container.getBoundingClientRect();
+  return { width: rect.width, height: rect.height };
+}
+
 setStatus('Three.js を読み込み中...');
 
 let THREE, OrbitControls, GLTFLoader, RGBELoader;
@@ -85,9 +205,10 @@ try {
 setStatus('シーンを初期化中...');
 
 // --- レンダラー ---
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const { width: vw, height: vh } = getViewerSize();
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setSize(vw, vh);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.3; // 落ち着いた明るさ
@@ -95,19 +216,19 @@ container.appendChild(renderer.domElement);
 
 // --- シーン ---
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1a1a1a);
+scene.background = new THREE.Color(0xffffff);
 
 // --- カメラ ---
-const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 1000);
+const camera = new THREE.PerspectiveCamera(45, vw / vh, 0.01, 1000);
 camera.position.set(2, 2, 3);
 
-// --- ライト (環境マップに加えて補助光) ---
+// --- ライト ---
 scene.add(new THREE.AmbientLight(0xffffff, 0.2));
 const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
 dirLight.position.set(5, 10, 7);
 scene.add(dirLight);
 
-// --- 簡易環境マップを作る関数 (HDR読み込み失敗時のフォールバック用) ---
+// --- 簡易環境マップ (HDR失敗時のフォールバック) ---
 function createSimpleEnvironment() {
   const envScene = new THREE.Scene();
   const geometry = new THREE.SphereGeometry(50, 32, 32);
@@ -115,7 +236,7 @@ function createSimpleEnvironment() {
   const positionAttr = geometry.attributes.position;
   const topColor = new THREE.Color(0xffffff);
   const midColor = new THREE.Color(0xb8c8d8);
-  const bottomColor = new THREE.Color(0x404858);
+  const bottomColor = new THREE.Color(0x808080);
 
   for (let i = 0; i < positionAttr.count; i++) {
     const y = positionAttr.getY(i) / 50;
@@ -135,7 +256,7 @@ function createSimpleEnvironment() {
   return envScene;
 }
 
-// --- 環境マップの読み込み (HDR優先、失敗時はフォールバック) ---
+// --- 環境マップの読み込み ---
 const pmremGenerator = new THREE.PMREMGenerator(renderer);
 
 setStatus('HDR 環境マップを読み込み中...');
@@ -189,23 +310,20 @@ function clearModel() {
   currentModel = null;
 }
 
-// 金属マテリアルの反射を強化する関数 (ほぼ鏡面まで強化)
+// 金属マテリアルの反射を強化する関数
 function enhanceMaterials(model) {
   let enhancedCount = 0;
   model.traverse((obj) => {
     if (obj.isMesh && obj.material) {
       const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
       mats.forEach((m) => {
-        // PBR マテリアル(MeshStandardMaterial 系)で少しでも金属っぽければ強化
         if (m && 'metalness' in m && m.metalness >= 0.1) {
-          // テクスチャ(metallicRoughnessMap)が値を上書きしないよう無効化
           if (m.metalnessMap) m.metalnessMap = null;
           if (m.roughnessMap) m.roughnessMap = null;
           m.metalness = 1.0;
           m.roughness = 0.3; // 落ち着いた金属感
           m.needsUpdate = true;
           enhancedCount++;
-          console.log('[GLB Viewer]   - ' + (m.name || '(無名)') + ' / type=' + m.type);
         }
       });
     }
@@ -242,7 +360,7 @@ function loadFromUrl(url, displayName) {
     (gltf) => {
       clearModel();
       currentModel = gltf.scene;
-      enhanceMaterials(currentModel); // 金属の反射を強化
+      enhanceMaterials(currentModel);
       scene.add(currentModel);
       frameModel(currentModel);
       setStatus('表示中: ' + displayName);
@@ -255,7 +373,7 @@ function loadFromUrl(url, displayName) {
     },
     (err) => {
       console.error(err);
-      setStatus('エラー: ' + displayName + ' を読み込めませんでした (' + (err.message || err) + ')');
+      setStatus('エラー: ' + displayName + ' を読み込めませんでした');
     }
   );
 }
@@ -269,7 +387,7 @@ function loadFromFile(file) {
       URL.revokeObjectURL(url);
       clearModel();
       currentModel = gltf.scene;
-      enhanceMaterials(currentModel); // 金属の反射を強化
+      enhanceMaterials(currentModel);
       scene.add(currentModel);
       frameModel(currentModel);
       setStatus('表示中: ' + file.name);
@@ -299,9 +417,10 @@ window.addEventListener('drop', (e) => {
 
 // --- リサイズ ---
 window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+  const { width, height } = getViewerSize();
+  camera.aspect = width / height;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(width, height);
 });
 
 // --- アニメーションループ ---
