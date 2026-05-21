@@ -90,7 +90,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.5; // 露出を上げて全体を明るく
+renderer.toneMappingExposure = 2.0; // 露出を上げて反射を際立たせる
 container.appendChild(renderer.domElement);
 
 // --- シーン ---
@@ -202,7 +202,7 @@ function enhanceMaterials(model) {
           if (m.metalnessMap) m.metalnessMap = null;
           if (m.roughnessMap) m.roughnessMap = null;
           m.metalness = 1.0;
-          m.roughness = 0.25; // 磨かれた金属(光沢あり)
+          m.roughness = 0.15; // やや鏡面寄りの金属
           m.needsUpdate = true;
           enhancedCount++;
           console.log('[GLB Viewer]   - ' + (m.name || '(無名)') + ' / type=' + m.type);
