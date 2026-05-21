@@ -198,10 +198,14 @@ function enhanceMaterials(model) {
       mats.forEach((m) => {
         // PBR マテリアル(MeshStandardMaterial 系)で少しでも金属っぽければ強化
         if (m && 'metalness' in m && m.metalness >= 0.1) {
+          // テクスチャ(metallicRoughnessMap)が値を上書きしないよう無効化
+          if (m.metalnessMap) m.metalnessMap = null;
+          if (m.roughnessMap) m.roughnessMap = null;
           m.metalness = 1.0;
           m.roughness = 0.4; // サテン仕上げ風
           m.needsUpdate = true;
           enhancedCount++;
+          console.log('[GLB Viewer]   - ' + (m.name || '(無名)') + ' / type=' + m.type);
         }
       });
     }
